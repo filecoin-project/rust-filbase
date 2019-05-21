@@ -2,31 +2,33 @@ use failure::bail;
 use futures::prelude::*;
 use futures_codec::Framed;
 use runtime::net::TcpStream;
-use serde::{Deserialize, Serialize};
 
+use crate::api::*;
 use crate::cbor_codec::Codec;
 use crate::server::DEFAULT_PORT;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum Request {
-    PieceAdd(String),
-    SectorSize,
-}
+pub async fn piece_add<S1: AsRef<str>, S2: AsRef<str>>(
+    key: S1,
+    amount: u64,
+    path: S2,
+) -> Result<(), failure::Error> {
+    let res = send(Request::PieceAdd {
+        key: key.as_ref().into(),
+        amount,
+        path: path.as_ref().into(),
+    })
+    .await?;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum Response {
-    SectorSize(u64),
-    Ok,
-}
-
-pub async fn piece_add(path: &str) -> Result<(), failure::Error> {
-    send(Request::PieceAdd(path.into())).await?;
+    match res {
+        Response::PieceAdd(id) => println!("{}", id),
+        _ => bail!("Invalid server response"),
+    }
 
     Ok(())
 }
 
-pub async fn sector_size() -> Result<(), failure::Error> {
-    let response = send(Request::SectorSize).await?;
+pub async fn sector_size(size: u64) -> Result<(), failure::Error> {
+    let response = send(Request::SectorSize(size)).await?;
 
     match response {
         Response::SectorSize(size) => println!("{}", size),
