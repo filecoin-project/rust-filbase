@@ -1,0 +1,11 @@
+# The host to the daemon should be listening on and the client tries to connect to.
+# host = "127.0.0.1"
+
+# The port the daemon should be bound to and the client tries to connect to.
+# port = 9988
+
+# porep_partitions = 1
+# post_partitions = 2,
+# metadata_dir = "meta"
+# sealed_sector_dir = "staged"
+# max_num_staged_sectors = 10

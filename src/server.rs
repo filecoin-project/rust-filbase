@@ -12,11 +12,12 @@ use sector_base::api::sector_size::SectorSize;
 
 use crate::api::*;
 use crate::cbor_codec::Codec;
-
-pub const DEFAULT_PORT: usize = 9988;
+use crate::settings::SETTINGS;
 
 pub async fn run() -> Result<(), failure::Error> {
-    let mut listener = TcpListener::bind(format!("127.0.0.1:{}", DEFAULT_PORT))?;
+    let cfg = SETTINGS.clone().read().unwrap().clone();
+
+    let mut listener = TcpListener::bind(cfg.server())?;
     println!("API listening on {}", listener.local_addr()?);
 
     // TODO: pull from cmd
@@ -24,26 +25,18 @@ pub async fn run() -> Result<(), failure::Error> {
     let prover_id = [0u8; 31];
     let sector_size = 1024;
 
-    // TODO: pull values from the config
-    let porep_partitions = 1;
-    let post_partitions = 2;
-    let metadata_dir = "meta";
-    let sealed_sector_dir = "sealed";
-    let staged_sector_dir = "staged";
-    let max_num_staged_sectors = 10;
-
     let sb = fil_api::init_sector_builder(
         SectorClass(
             SectorSize(sector_size),
-            PoRepProofPartitions(porep_partitions),
-            PoStProofPartitions(post_partitions),
+            PoRepProofPartitions(cfg.porep_partitions),
+            PoStProofPartitions(cfg.post_partitions),
         ),
         last_used_id,
-        metadata_dir,
+        &cfg.metadata_dir,
         prover_id,
-        sealed_sector_dir,
-        staged_sector_dir,
-        max_num_staged_sectors,
+        &cfg.sealed_sector_dir,
+        &cfg.staged_sector_dir,
+        cfg.max_num_staged_sectors,
     )?;
     let sb = Arc::new(Mutex::new(sb));
 

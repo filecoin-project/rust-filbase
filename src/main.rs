@@ -7,6 +7,7 @@ mod api;
 mod cbor_codec;
 mod client;
 mod server;
+mod settings;
 
 #[macro_use]
 mod macros;
@@ -17,6 +18,12 @@ async fn main() -> Result<(), failure::Error> {
         .version("1.0")
         .about("Manage all your sectors and proofs")
         .setting(AppSettings::ArgRequiredElseHelp)
+        .arg(
+            Arg::with_name("config")
+                .long("config")
+                .short("c")
+                .takes_value(true),
+        )
         .subcommand(SubCommand::with_name("daemon").about("Starts the daemon"))
         .subcommand(
             SubCommand::with_name("post")
@@ -151,12 +158,7 @@ async fn main() -> Result<(), failure::Error> {
                 .subcommand(
                     SubCommand::with_name("size")
                         .about("Get the size of sector")
-                        .arg(
-                            Arg::with_name("sector-size")
-                                .long("sector-size")
-                                .takes_value(true)
-                                .required(true),
-                        ),
+                        .arg(Arg::with_name("SIZE").takes_value(true).required(true)),
                 )
                 .subcommand(SubCommand::with_name("list-sealed"))
                 .subcommand(SubCommand::with_name("list-staged")),
@@ -187,6 +189,12 @@ async fn main() -> Result<(), failure::Error> {
                 ),
         )
         .get_matches();
+
+    // Load settings
+    if let Some(cfg_path) = matches.value_of("config") {
+        println!("loading configuration from {}", cfg_path);
+        settings::Settings::load_config(cfg_path);
+    }
 
     match matches.subcommand() {
         ("daemon", _) => server::run().await,
@@ -247,7 +255,7 @@ async fn main() -> Result<(), failure::Error> {
         },
         ("sector", Some(m)) => match m.subcommand() {
             ("size", Some(m)) => {
-                let size = value_t!(m, "sector-size", u64)?;
+                let size = value_t!(m, "SIZE", u64)?;
                 client::sector_size(size).await
             }
             ("list-sealed", Some(_m)) => client::sector_list_sealed().await,

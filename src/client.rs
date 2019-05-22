@@ -5,7 +5,7 @@ use runtime::net::TcpStream;
 
 use crate::api::*;
 use crate::cbor_codec::Codec;
-use crate::server::DEFAULT_PORT;
+use crate::settings::SETTINGS;
 
 pub async fn post_generate(comm_rs: Vec<[u8; 32]>, challenge_seed: [u8; 32]) -> Result<(), Error> {
     let res = send(Request::PostGenerate {
@@ -180,7 +180,8 @@ pub async fn piece_read<S: AsRef<str>>(key: S) -> Result<(), Error> {
 }
 
 async fn send<'a>(msg: Request) -> Result<Response, Error> {
-    let stream = TcpStream::connect(format!("127.0.0.1:{}", DEFAULT_PORT)).await?;
+    let server = SETTINGS.clone().read().unwrap().server();
+    let stream = TcpStream::connect(server).await?;
     let mut framed = Framed::new(stream, Codec::new());
 
     framed.send(msg).await?;
