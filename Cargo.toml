@@ -17,3 +17,4 @@ futures_codec = "0.2"
 bytes = "0.4.12"
 filecoin-proofs = { git = "https://github.com/filecoin-project/rust-proofs", branch = "safe-filproofs" }
 sector-base = { git = "https://github.com/filecoin-project/rust-proofs", branch = "safe-filproofs" }
+hex = "0.3.2"
