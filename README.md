@@ -12,6 +12,12 @@
 > cargo build --release
 ```
 
+In case you have errors during the build try to update your nightly version:
+
+```sh
+rustup update && rustup toolchain install nightly && cargo build --release
+```
+
 ## Usage
 
 ```sh
