@@ -172,20 +172,20 @@ async fn main() -> Result<(), failure::Error> {
                         .about("Add a new piece")
                         .arg(
                             Arg::with_name("key")
-                                .long("key")
                                 .takes_value(true)
                                 .required(true),
                         )
                         .arg(
                             Arg::with_name("amount")
+                                .help("The size of the piece in bytes, if not provided the whole file is assumed.")
                                 .long("amount")
                                 .takes_value(true)
-                                .required(true),
+
                         )
                         .arg(Arg::with_name("PATH").required(true)),
                 )
                 .subcommand(
-                    SubCommand::with_name("read").arg(Arg::with_name("PATH").required(true)),
+                    SubCommand::with_name("read").arg(Arg::with_name("KEY").required(true)),
                 ),
         )
         .get_matches();
@@ -264,14 +264,16 @@ async fn main() -> Result<(), failure::Error> {
         },
         ("piece", Some(m)) => match m.subcommand() {
             ("add", Some(m)) => {
-                let key = m.value_of("key").unwrap();
-                let amount = value_t!(m, "amount", u64)?;
+                let key = m.value_of("KEY").unwrap();
+                let amount = m
+                    .value_of("amount")
+                    .map(|s| s.parse().expect("invalid size"));
                 let path = m.value_of("PATH").unwrap();
 
                 client::piece_add(key, amount, path).await
             }
             ("read", Some(m)) => {
-                let key = m.value_of("key").unwrap();
+                let key = m.value_of("KEY").unwrap();
 
                 client::piece_read(key).await
             }

@@ -150,7 +150,7 @@ pub async fn sector_list_staged() -> Result<(), Error> {
 
 pub async fn piece_add<S1: AsRef<str>, S2: AsRef<str>>(
     key: S1,
-    amount: u64,
+    amount: Option<u64>,
     path: S2,
 ) -> Result<(), Error> {
     let res = send(Request::PieceAdd {
@@ -188,7 +188,7 @@ async fn send<'a>(msg: Request) -> Result<Response, Error> {
 
     let response = framed.next().await.unwrap()?;
     match response {
-        _ => Ok(response),
         Response::Err(err) => Err(format_err!("Server error: {}", err)),
+        _ => Ok(response),
     }
 }

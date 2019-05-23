@@ -149,6 +149,12 @@ fn respond(res: Request, sb: Arc<Mutex<SectorBuilder>>) -> Result<Response, fail
 
         // -- Piece
         Request::PieceAdd { key, amount, path } => {
+            let amount = if let Some(amount) = amount {
+                Ok(amount)
+            } else {
+                get_file_size(&path)
+            }?;
+
             let id = fil_api::add_piece(&sb.lock().unwrap(), &key, amount, &path)?;
             Response::PieceAdd(id)
         }
@@ -159,4 +165,10 @@ fn respond(res: Request, sb: Arc<Mutex<SectorBuilder>>) -> Result<Response, fail
     };
 
     Ok(response)
+}
+
+fn get_file_size(path: &str) -> Result<u64, failure::Error> {
+    let data = std::fs::metadata(path)?;
+
+    Ok(data.len())
 }
