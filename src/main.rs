@@ -1,5 +1,9 @@
 #![feature(async_await)]
 
+#[cfg(feature = "benchy")]
+#[macro_use]
+extern crate prometheus;
+
 use clap::{value_t, values_t};
 use failure::bail;
 use rand::{thread_rng, Rng};

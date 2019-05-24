@@ -7,9 +7,11 @@ use chrono::Utc;
 use clap::value_t;
 use failure::bail;
 use fil_sapling_crypto::jubjub::JubjubBls12;
+use lazy_static::lazy_static;
 use memmap::MmapMut;
 use memmap::MmapOptions;
 use paired::bls12_381::Bls12;
+use prometheus::{Encoder, IntGaugeVec, TextEncoder};
 use rand::{Rng, SeedableRng, XorShiftRng};
 use storage_proofs::circuit::metric::*;
 use storage_proofs::circuit::zigzag::ZigZagCompound;
@@ -21,6 +23,37 @@ use storage_proofs::layered_drgporep::{self, ChallengeRequirements, LayerChallen
 use storage_proofs::porep::PoRep;
 use storage_proofs::proof::ProofScheme;
 use storage_proofs::zigzag_drgporep::*;
+
+const LABELS: [&'static str; 8] = [
+    "data_size_bytes",
+    "m",
+    "expansion_degree",
+    "sloth_iter",
+    "partitions",
+    "hasher",
+    "samples",
+    "layers",
+];
+
+lazy_static! {
+    static ref REPLICATION_TIME_MS_GAUGE: IntGaugeVec =
+        register_int_gauge_vec!("replication_time_ms", "Total replication timea", &LABELS).unwrap();
+    static ref REPLICATION_TIME_NS_PER_BYTE_GAUGE: IntGaugeVec = register_int_gauge_vec!(
+        "replication_time_ns_per_byte",
+        "Replication time per byte",
+        &LABELS
+    )
+    .unwrap();
+    static ref VANILLA_PROVING_TIME_US_GAUGE: IntGaugeVec =
+        register_int_gauge_vec!("vanilla_proving_time_us", "Vanilla proving time", &LABELS)
+            .unwrap();
+    static ref VANILLA_VERIFICATION_TIME_US_GAUGE: IntGaugeVec = register_int_gauge_vec!(
+        "vanilla_verification_time_us",
+        "Vanilla verification time",
+        &LABELS
+    )
+    .unwrap();
+}
 
 fn file_backed_mmap_from_zeroes(n: usize, use_tmp: bool) -> Result<MmapMut, failure::Error> {
     let file: File = if use_tmp {
@@ -74,7 +107,7 @@ struct Params {
     hasher: String,
 }
 
-fn do_the_work<H: 'static>(params: Params) -> Result<(), failure::Error>
+fn do_the_work<H: 'static>(params: Params, recorder: &Recorder) -> Result<(), failure::Error>
 where
     H: Hasher,
 {
@@ -151,12 +184,19 @@ where
             replication_duration / (*data_size as u32)
         };
 
+        recorder
+            .replication_time_ms
+            .set(replication_duration.as_millis() as i64);
+        recorder
+            .replication_time_ns_per_byte
+            .set(time_per_byte.as_nanos() as i64);
+
         println!(
             "Replication: total time: {:.04}s",
             replication_duration.as_millis() as f32 / 1000.
         );
         println!(
-            "Replication: time per byte: {:.04}ms",
+            "Replication: time per byte: {:.04}us",
             time_per_byte.as_nanos() as f32 / 1000.
         );
 
@@ -167,9 +207,13 @@ where
         total_proving += vanilla_proving;
 
         println!(
-            "Vanilla proving: {:.04}ms",
+            "Vanilla proving: {:.04}us",
             vanilla_proving.as_nanos() as f32 / 1000.
         );
+
+        recorder
+            .vanilla_proving_time_us
+            .set(vanilla_proving.as_micros() as i64);
 
         if *dump_proofs {
             dump_proof_bytes(&all_partition_proofs)?;
@@ -186,7 +230,12 @@ where
             if !verified {
                 panic!("verification failed");
             }
-            total_verifying += start.elapsed();
+
+            let elapsed = start.elapsed();
+            recorder
+                .vanilla_verification_time_us
+                .set(elapsed.as_micros() as i64);
+            total_verifying += elapsed;
         }
 
         let verifying_avg = total_verifying / *samples as u32;
@@ -313,6 +362,73 @@ fn do_circuit_work<H: 'static + Hasher>(
     Ok(proving_time)
 }
 
+struct Recorder {
+    pub replication_time_ms: prometheus::core::GenericGauge<prometheus::core::AtomicI64>,
+    pub replication_time_ns_per_byte: prometheus::core::GenericGauge<prometheus::core::AtomicI64>,
+    pub vanilla_proving_time_us: prometheus::core::GenericGauge<prometheus::core::AtomicI64>,
+    pub vanilla_verification_time_us: prometheus::core::GenericGauge<prometheus::core::AtomicI64>,
+}
+
+impl Recorder {
+    pub fn from_params(params: &Params) -> Self {
+        let l0 = format!("{}", params.data_size);
+        let l1 = format!("{}", params.m);
+        let l2 = format!("{}", params.expansion_degree);
+        let l3 = format!("{}", params.sloth_iter);
+        let l4 = format!("{}", params.partitions);
+        let l5 = params.hasher.clone();
+        let l6 = format!("{}", params.samples);
+        let l7 = format!("{}", params.layer_challenges.layers());
+
+        let labels = [
+            l0.as_str(),
+            l1.as_str(),
+            l2.as_str(),
+            l3.as_str(),
+            l4.as_str(),
+            l5.as_str(),
+            l6.as_str(),
+            l7.as_str(),
+        ];
+
+        Recorder {
+            replication_time_ms: REPLICATION_TIME_MS_GAUGE.with_label_values(&labels[..]),
+            replication_time_ns_per_byte: REPLICATION_TIME_NS_PER_BYTE_GAUGE
+                .with_label_values(&labels[..]),
+            vanilla_proving_time_us: VANILLA_PROVING_TIME_US_GAUGE.with_label_values(&labels[..]),
+            vanilla_verification_time_us: VANILLA_VERIFICATION_TIME_US_GAUGE
+                .with_label_values(&labels[..]),
+        }
+    }
+
+    /// Print all results to stdout
+    pub fn print(&self) {
+        // Gather the metrics.
+        let mut buffer = vec![];
+        let encoder = TextEncoder::new();
+        let metric_families = prometheus::gather();
+        encoder.encode(&metric_families, &mut buffer).unwrap();
+
+        // Output to the standard output.
+        println!("{}", String::from_utf8(buffer).unwrap());
+    }
+
+    /// Pushes the data to the prometheus push server.
+    pub fn push(&self) {
+        let address = "127.0.0.1:9091";
+
+        let metric_families = prometheus::gather();
+        prometheus::push_metrics(
+            "filbase-zigzag-bench",
+            labels! { "why".to_owned() => "are you here?".to_owned(), },
+            &address,
+            metric_families,
+            None,
+        )
+        .expect("failed to push")
+    }
+}
+
 pub fn zigzag_cmd(matches: &clap::ArgMatches) -> Result<(), failure::Error> {
     let taper = value_t!(matches, "taper", f64)?;
     let layers = value_t!(matches, "layers", usize)?;
@@ -342,10 +458,20 @@ pub fn zigzag_cmd(matches: &clap::ArgMatches) -> Result<(), failure::Error> {
         samples: 5,
     };
 
+    let recorder = Recorder::from_params(&params);
+
     match params.hasher.as_ref() {
-        "pedersen" => do_the_work::<PedersenHasher>(params),
-        "sha256" => do_the_work::<Sha256Hasher>(params),
-        "blake2s" => do_the_work::<Blake2sHasher>(params),
+        "pedersen" => do_the_work::<PedersenHasher>(params, &recorder)?,
+        "sha256" => do_the_work::<Sha256Hasher>(params, &recorder)?,
+        "blake2s" => do_the_work::<Blake2sHasher>(params, &recorder)?,
         _ => bail!("invalid hasher: {}", params.hasher),
     }
+
+    recorder.print();
+
+    if matches.is_present("push-prometheus") {
+        recorder.push();
+    }
+
+    Ok(())
 }

@@ -319,5 +319,6 @@ fn benchy_cmd() -> App<'static, 'static> {
                         .help("number of layers to taper")
                         .takes_value(true)
                 )
+                .arg(Arg::with_name("push-prometheus").long("push-prometheus").help("When enabled pushes the collected stats to a prometheus pushgateway"))
         )
 }
