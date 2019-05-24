@@ -14,16 +14,15 @@ use crate::api::*;
 use crate::cbor_codec::Codec;
 use crate::settings::SETTINGS;
 
-pub async fn run() -> Result<(), failure::Error> {
+pub async fn run(
+    last_used_id: u64,
+    prover_id: [u8; 31],
+    sector_size: u64,
+) -> Result<(), failure::Error> {
     let cfg = SETTINGS.clone().read().unwrap().clone();
 
     let mut listener = TcpListener::bind(cfg.server())?;
     println!("API listening on {}", listener.local_addr()?);
-
-    // TODO: pull from cmd
-    let last_used_id = 0;
-    let prover_id = [0u8; 31];
-    let sector_size = 1024;
 
     let sb = fil_api::init_sector_builder(
         SectorClass(
@@ -40,7 +39,10 @@ pub async fn run() -> Result<(), failure::Error> {
     )?;
     let sb = Arc::new(Mutex::new(sb));
 
-    println!("sector builder started");
+    println!(
+        "Sector builder started, with ID: {}",
+        hex::encode(&prover_id)
+    );
 
     let mut incoming = listener.incoming();
 

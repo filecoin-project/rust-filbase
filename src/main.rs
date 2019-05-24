@@ -2,6 +2,7 @@
 
 use clap::{value_t, values_t, App, AppSettings, Arg, SubCommand};
 use failure::bail;
+use rand::{thread_rng, Rng};
 
 mod api;
 mod cbor_codec;
@@ -24,7 +25,29 @@ async fn main() -> Result<(), failure::Error> {
                 .short("c")
                 .takes_value(true),
         )
-        .subcommand(SubCommand::with_name("daemon").about("Starts the daemon"))
+        .subcommand(
+            SubCommand::with_name("daemon").about("Starts the daemon")
+                .arg(
+                    Arg::with_name("prover-id")
+                        .long("prover-id")
+                        .help("The id of the prover, encoded as hex (31 bytes)")
+                        .takes_value(true)
+                )
+                .arg(
+                    Arg::with_name("sector-size")
+                        .long("sector-size")
+                        .help("The sector size to use, in bytes.")
+                        .takes_value(true)
+                        .default_value("1024")
+                )
+                .arg(
+                    Arg::with_name("last-used-id")
+                        .long("last-used-id")
+                        .help("The last used sector id")
+                        .takes_value(true)
+                        .default_value("0")
+                )
+        )
         .subcommand(
             SubCommand::with_name("post")
                 .setting(AppSettings::ArgRequiredElseHelp)
@@ -197,7 +220,18 @@ async fn main() -> Result<(), failure::Error> {
     }
 
     match matches.subcommand() {
-        ("daemon", _) => server::run().await,
+        ("daemon", Some(m)) => {
+            let prover_id = if m.value_of("prover-id").is_some() {
+                hex_arr!(31, m, "prover-id")?
+            } else {
+                let mut rng = thread_rng();
+                rng.gen()
+            };
+            let last_used_id = value_t!(m, "last-used-id", u64)?;
+            let sector_size = value_t!(m, "sector-size", u64)?;
+
+            server::run(last_used_id, prover_id, sector_size).await
+        }
         ("post", Some(m)) => match m.subcommand() {
             ("generate", Some(m)) => {
                 let comm_rs = hex_vec_arr!(32, m, "comm-rs")?;

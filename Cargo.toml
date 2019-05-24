@@ -20,3 +20,4 @@ sector-base = { git = "https://github.com/filecoin-project/rust-proofs", branch 
 hex = "0.3.2"
 config = "0.9.3"
 lazy_static = "1.3.0"
+rand = "0.6.5"
