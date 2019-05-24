@@ -29,6 +29,15 @@ rustup update && rustup toolchain install nightly && cargo build --release
   1024
 ```
 
+## Benchmarks
+
+In order to use this tool to run benchmarks, it needs to be compiled with the `benchy` feature.
+
+```sh
+> cargo build --release --features benchy
+> ./target/release/filbase benchy --help
+```
+
 
 ## Testing
 
