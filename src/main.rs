@@ -1,10 +1,13 @@
 #![feature(async_await)]
 
-use clap::{value_t, values_t, App, AppSettings, Arg, SubCommand};
+use clap::{value_t, values_t};
 use failure::bail;
 use rand::{thread_rng, Rng};
 
 mod api;
+mod app;
+#[cfg(feature = "benchy")]
+mod benchy;
 mod cbor_codec;
 mod client;
 mod server;
@@ -15,203 +18,7 @@ mod macros;
 
 #[runtime::main]
 async fn main() -> Result<(), failure::Error> {
-    let matches = App::new("Filecoin Base")
-        .version("1.0")
-        .about("Manage all your sectors and proofs")
-        .setting(AppSettings::ArgRequiredElseHelp)
-        .arg(
-            Arg::with_name("config")
-                .long("config")
-                .short("c")
-                .takes_value(true),
-        )
-        .subcommand(
-            SubCommand::with_name("daemon").about("Starts the daemon")
-                .arg(
-                    Arg::with_name("prover-id")
-                        .long("prover-id")
-                        .help("The id of the prover, encoded as hex (31 bytes)")
-                        .takes_value(true)
-                )
-                .arg(
-                    Arg::with_name("sector-size")
-                        .long("sector-size")
-                        .help("The sector size to use, in bytes.")
-                        .takes_value(true)
-                        .default_value("1024")
-                )
-                .arg(
-                    Arg::with_name("last-used-id")
-                        .long("last-used-id")
-                        .help("The last used sector id")
-                        .takes_value(true)
-                        .default_value("0")
-                )
-        )
-        .subcommand(
-            SubCommand::with_name("post")
-                .setting(AppSettings::ArgRequiredElseHelp)
-                .subcommand(
-                    SubCommand::with_name("generate")
-                        .arg(
-                            Arg::with_name("comm-rs")
-                                .long("comm-rs")
-                                .help("A list of hex encoded comm_rs (each 32 bytes)")
-                                .use_delimiter(true)
-                                .takes_value(true)
-                                .required(true),
-                        )
-                        .arg(
-                            Arg::with_name("challenge-seed")
-                                .long("challenge-seed")
-                                .help("Hex encoded seed (32 bytes)")
-                                .takes_value(true)
-                                .required(true),
-                        ),
-                )
-                .subcommand(
-                    SubCommand::with_name("verify")
-                        .arg(
-                            Arg::with_name("sector-size")
-                                .long("sector-size")
-                                .takes_value(true)
-                                .required(true),
-                        )
-                        .arg(
-                            Arg::with_name("comm-rs")
-                                .long("comm-rs")
-                                .help("A list of hex encoded comm_rs (each 32 bytes)")
-                                .use_delimiter(true)
-                                .takes_value(true)
-                                .required(true),
-                        )
-                        .arg(
-                            Arg::with_name("challenge-seed")
-                                .long("challenge-seed")
-                                .help("Hex encoded seed (32 bytes)")
-                                .takes_value(true)
-                                .required(true),
-                        )
-                        .arg(
-                            Arg::with_name("proofs")
-                                .long("proofs")
-                                .help("A list of hex encoded proofs")
-                                .use_delimiter(true)
-                                .takes_value(true)
-                                .required(true),
-                        )
-                        .arg(
-                            Arg::with_name("faults")
-                                .long("faults")
-                                .help("A list of sector ids who faulted")
-                                .use_delimiter(true)
-                                .takes_value(true)
-                                .required(true),
-                        ),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("seal")
-                .setting(AppSettings::ArgRequiredElseHelp)
-                .subcommand(SubCommand::with_name("generate"))
-                .subcommand(
-                    SubCommand::with_name("verify")
-                        .arg(
-                            Arg::with_name("sector-size")
-                                .long("sector-size")
-                                .takes_value(true)
-                                .required(true),
-                        )
-                        .arg(
-                            Arg::with_name("comm-r")
-                                .long("comm-r")
-                                .help("Hex encoded comm_r (32 bytes)")
-                                .takes_value(true)
-                                .required(true),
-                        )
-                        .arg(
-                            Arg::with_name("comm-d")
-                                .long("comm-d")
-                                .help("Hex encoded comm_d (32 bytes)")
-                                .takes_value(true)
-                                .required(true),
-                        )
-                        .arg(
-                            Arg::with_name("comm-r-star")
-                                .long("comm-r-star")
-                                .help("Hex encoded comm_r_star (32 bytes)")
-                                .takes_value(true)
-                                .required(true),
-                        )
-                        .arg(
-                            Arg::with_name("prover-id")
-                                .long("prover-id")
-                                .help("Hex encoded prover ID (31 bytes)")
-                                .takes_value(true)
-                                .required(true),
-                        )
-                        .arg(
-                            Arg::with_name("sector-id")
-                                .long("sector-id")
-                                .help("Hex encoded sector ID (31 bytes)")
-                                .takes_value(true)
-                                .required(true),
-                        )
-                        .arg(
-                            Arg::with_name("proof")
-                                .long("proof")
-                                .help("Hex encoded proof")
-                                .takes_value(true)
-                                .required(true),
-                        ),
-                )
-                .subcommand(
-                    SubCommand::with_name("status").arg(
-                        Arg::with_name("sector-id")
-                            .long("sector-id")
-                            .takes_value(true)
-                            .required(true),
-                    ),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("sector")
-                .about("Manage sectors")
-                .setting(AppSettings::ArgRequiredElseHelp)
-                .subcommand(
-                    SubCommand::with_name("size")
-                        .about("Get the size of sector")
-                        .arg(Arg::with_name("SIZE").takes_value(true).required(true)),
-                )
-                .subcommand(SubCommand::with_name("list-sealed"))
-                .subcommand(SubCommand::with_name("list-staged")),
-        )
-        .subcommand(
-            SubCommand::with_name("piece")
-                .about("Manage pieces")
-                .setting(AppSettings::ArgRequiredElseHelp)
-                .subcommand(
-                    SubCommand::with_name("add")
-                        .about("Add a new piece")
-                        .arg(
-                            Arg::with_name("key")
-                                .takes_value(true)
-                                .required(true),
-                        )
-                        .arg(
-                            Arg::with_name("amount")
-                                .help("The size of the piece in bytes, if not provided the whole file is assumed.")
-                                .long("amount")
-                                .takes_value(true)
-
-                        )
-                        .arg(Arg::with_name("PATH").required(true)),
-                )
-                .subcommand(
-                    SubCommand::with_name("read").arg(Arg::with_name("KEY").required(true)),
-                ),
-        )
-        .get_matches();
+    let matches = app::get_matches();
 
     // Load settings
     if let Some(cfg_path) = matches.value_of("config") {
@@ -313,6 +120,17 @@ async fn main() -> Result<(), failure::Error> {
             }
             _ => bail!("Unknown subcommand"),
         },
+        ("benchy", Some(m)) => {
+            #[cfg(not(feature = "benchy"))]
+            bail!("Please compile with the benchy feature flag to enable benchmarking");
+            #[cfg(feature = "benchy")]
+            {
+                match m.subcommand() {
+                    ("zigzag", Some(m)) => benchy::zigzag::zigzag_cmd(m),
+                    _ => bail!("Unknown subcommand"),
+                }
+            }
+        }
         _ => bail!("Unknown subcommand"),
     }
 }
