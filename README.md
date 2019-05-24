@@ -1,5 +1,7 @@
 # Filbase
 
+[![CircleCI][circleci-shield]][circleci] [![License][license-shield]][license]
+
 > Filecoin proofs & sector management in a convenient package.
 
 
@@ -51,3 +53,9 @@ The Filecoin Project is dual-licensed under Apache 2.0 and MIT terms:
 
 - Apache License, Version 2.0, ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
 - MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+
+
+[circleci-shield]: https://img.shields.io/circleci/project/github/filecoin-project/rust-filbase.svg?style=flat-square
+[circleci]: https://circleci.com/gh/filecoin-project/rust-filbase
+[license-shield]: https://img.shields.io/badge/License-MIT%2FApache2.0-green.svg?style=flat-square
+[license]: https://github.com/dignifiedquire/rust-accumulators/blob/master/LICENSE.md
