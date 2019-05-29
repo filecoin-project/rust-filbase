@@ -286,6 +286,11 @@ fn benchy_cmd() -> App<'static, 'static> {
                         .help("Generate and verify a groth circuit proof.")
                 )
                 .arg(
+                    Arg::with_name("bench")
+                        .long("bench")
+                        .help("Synthesize and report inputs/constraints for a circuit.")
+                )
+                .arg(
                     Arg::with_name("no-bench")
                         .long("no-bench")
                         .help("Don't synthesize and report inputs/constraints for a circuit.")
@@ -296,7 +301,6 @@ fn benchy_cmd() -> App<'static, 'static> {
                         .help("Don't replicate or perform Groth proving.")
                         .conflicts_with_all(&["no-bench", "groth", "extract"])
                 )
-
                 .arg(
                     Arg::with_name("circuit")
                         .long("circuit")

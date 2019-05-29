@@ -32,7 +32,6 @@ tempfile = { version = "3.0.8", optional = true }
 storage-proofs = { git = "https://github.com/filecoin-project/rust-proofs", branch = "safe-filproofs", optional = true }
 prometheus = { version = "0.6.0", optional = true }
 
-
 [features]
 default = []
 benchy = [
@@ -52,3 +51,4 @@ benchy = [
   "filecoin-proofs/simd",
   "filecoin-proofs/asm",
 ]
+process = ["benchy", "prometheus/process"]

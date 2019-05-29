@@ -53,6 +53,18 @@ lazy_static! {
         &LABELS
     )
     .unwrap();
+    static ref CIRCUIT_NUM_INPUTS_GAUGE: IntGaugeVec = register_int_gauge_vec!(
+        "circuit_num_inputs",
+        "Number of inputs to the circuit",
+        &LABELS
+    )
+    .unwrap();
+    static ref CIRCUIT_NUM_CONSTRAINTS_GAUGE: IntGaugeVec = register_int_gauge_vec!(
+        "circuit_num_constraints",
+        "Number of constraints of the circuit",
+        &LABELS
+    )
+    .unwrap();
 }
 
 fn file_backed_mmap_from_zeroes(n: usize, use_tmp: bool) -> Result<MmapMut, failure::Error> {
@@ -248,7 +260,7 @@ where
     };
 
     if *circuit || *groth || *bench {
-        total_proving += do_circuit_work(&pp, pub_in, priv_in, &params)?;
+        total_proving += do_circuit_work(&pp, pub_in, priv_in, &params, recorder)?;
     }
 
     if let Some(data) = d {
@@ -275,6 +287,7 @@ fn do_circuit_work<H: 'static + Hasher>(
     pub_in: Option<<ZigZagDrgPoRep<H> as ProofScheme>::PublicInputs>,
     priv_in: Option<<ZigZagDrgPoRep<H> as ProofScheme>::PrivateInputs>,
     params: &Params,
+    recorder: &Recorder,
 ) -> Result<Duration, failure::Error> {
     let mut proving_time = Duration::new(0, 0);
     let Params {
@@ -294,12 +307,17 @@ fn do_circuit_work<H: 'static + Hasher>(
     };
 
     if *bench || *circuit {
+        println!("generating blank metric circuit");
         let mut cs = MetricCS::<Bls12>::new();
         ZigZagCompound::blank_circuit(&pp, &engine_params).synthesize(&mut cs)?;
 
         println!("circuit_num_inputs: {}", cs.num_inputs());
         println!("circuit_num_constraints: {}", cs.num_constraints());
 
+        recorder.circuit_num_inputs.set(cs.num_inputs() as i64);
+        recorder
+            .circuit_num_constraints
+            .set(cs.num_constraints() as i64);
         if *circuit {
             println!("{}", cs.pretty_print());
         }
@@ -362,11 +380,15 @@ fn do_circuit_work<H: 'static + Hasher>(
     Ok(proving_time)
 }
 
+type IntGauge = prometheus::core::GenericGauge<prometheus::core::AtomicI64>;
+
 struct Recorder {
-    pub replication_time_ms: prometheus::core::GenericGauge<prometheus::core::AtomicI64>,
-    pub replication_time_ns_per_byte: prometheus::core::GenericGauge<prometheus::core::AtomicI64>,
-    pub vanilla_proving_time_us: prometheus::core::GenericGauge<prometheus::core::AtomicI64>,
-    pub vanilla_verification_time_us: prometheus::core::GenericGauge<prometheus::core::AtomicI64>,
+    pub replication_time_ms: IntGauge,
+    pub replication_time_ns_per_byte: IntGauge,
+    pub vanilla_proving_time_us: IntGauge,
+    pub vanilla_verification_time_us: IntGauge,
+    pub circuit_num_inputs: IntGauge,
+    pub circuit_num_constraints: IntGauge,
 }
 
 impl Recorder {
@@ -398,6 +420,8 @@ impl Recorder {
             vanilla_proving_time_us: VANILLA_PROVING_TIME_US_GAUGE.with_label_values(&labels[..]),
             vanilla_verification_time_us: VANILLA_VERIFICATION_TIME_US_GAUGE
                 .with_label_values(&labels[..]),
+            circuit_num_inputs: CIRCUIT_NUM_INPUTS_GAUGE.with_label_values(&labels[..]),
+            circuit_num_constraints: CIRCUIT_NUM_CONSTRAINTS_GAUGE.with_label_values(&labels[..]),
         }
     }
 
