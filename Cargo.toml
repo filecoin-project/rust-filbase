@@ -6,8 +6,8 @@ edition = "2018"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-filecoin-proofs = { git = "https://github.com/filecoin-project/rust-proofs", branch = "safe-filproofs" }
-sector-base = { git = "https://github.com/filecoin-project/rust-proofs", branch = "safe-filproofs" }
+filecoin-proofs = { rev = "07de4ef9eac5400335229678c0cc01ab8d967273", git = "https://github.com/filecoin-project/rust-proofs" }
+sector-builder = { rev = "f435451187745b741e6026317c309706439e2839", git = "https://github.com/filecoin-project/rust-fil-sector-builder"}
 
 clap = "2.33.0"
 failure = "0.1.5"
@@ -29,7 +29,7 @@ fil-sapling-crypto = {version = "0.1.0", optional = true}
 memmap = {version = "0.7.0", optional = true}
 serde_json = { version = "1.0.39", optional = true }
 tempfile = { version = "3.0.8", optional = true }
-storage-proofs = { git = "https://github.com/filecoin-project/rust-proofs", branch = "safe-filproofs", optional = true }
+storage-proofs = { rev = "07de4ef9eac5400335229678c0cc01ab8d967273", git = "https://github.com/filecoin-project/rust-proofs", optional = true }
 prometheus = { version = "0.6.0", optional = true }
 
 [features]

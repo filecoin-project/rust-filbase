@@ -1,4 +1,3 @@
-use filecoin_proofs::api::sector_builder::metadata::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -38,7 +37,7 @@ pub enum Request {
     // -- Piece
     PieceAdd {
         key: String,
-        amount: Option<u64>,
+        amount: u64,
         path: String,
     },
     PieceRead(String),
@@ -56,12 +55,12 @@ pub enum Response {
     // -- Seal
     SealVerify(bool),
     SealAllStaged,
-    SealStatus(SealStatus),
+    SealStatus(sector_builder::SealStatus),
 
     // -- Sector
     SectorSize(u64),
-    SectorListSealed(Vec<SealedSectorMetadata>),
-    SectorListStaged(Vec<StagedSectorMetadata>),
+    SectorListSealed(Vec<sector_builder::SealedSectorMetadata>),
+    SectorListStaged(Vec<sector_builder::StagedSectorMetadata>),
 
     // -- Piece
     PieceAdd(u64),
