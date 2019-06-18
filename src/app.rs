@@ -1,7 +1,7 @@
 use clap::{App, AppSettings, Arg, SubCommand};
 
 pub fn get_matches() -> clap::ArgMatches<'static> {
-    let mut app = App::new("Filecoin Base")
+    let app = App::new("Filecoin Base")
         .version("1.0")
         .about("Manage all your sectors and proofs")
         .setting(AppSettings::ArgRequiredElseHelp)
