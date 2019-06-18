@@ -150,7 +150,7 @@ pub async fn sector_list_staged() -> Result<(), Error> {
 
 pub async fn piece_add<S1: AsRef<str>, S2: AsRef<str>>(
     key: S1,
-    amount: Option<u64>,
+    amount: u64,
     path: S2,
 ) -> Result<(), Error> {
     let res = send(Request::PieceAdd {

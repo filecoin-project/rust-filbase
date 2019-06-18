@@ -1,14 +1,9 @@
 use std::sync::{Arc, Mutex};
 
-use filecoin_proofs::api::safe as fil_api;
-use filecoin_proofs::api::sector_builder::SectorBuilder;
 use futures::prelude::*;
 use futures_codec::Framed;
 use runtime::net::{TcpListener, TcpStream};
-use sector_base::api::porep_proof_partitions::PoRepProofPartitions;
-use sector_base::api::post_proof_partitions::PoStProofPartitions;
-use sector_base::api::sector_class::SectorClass;
-use sector_base::api::sector_size::SectorSize;
+use sector_builder::SectorBuilder;
 
 use crate::api::*;
 use crate::cbor_codec::Codec;
@@ -24,11 +19,11 @@ pub async fn run(
     let mut listener = TcpListener::bind(cfg.server())?;
     println!("API listening on {}", listener.local_addr()?);
 
-    let sb = fil_api::init_sector_builder(
-        SectorClass(
-            SectorSize(sector_size),
-            PoRepProofPartitions(cfg.porep_partitions),
-            PoStProofPartitions(cfg.post_partitions),
+    let sb = SectorBuilder::init_from_metadata(
+        sector_builder::SectorClass(
+            sector_builder::SectorSize(sector_size),
+            sector_builder::PoRepProofPartitions(cfg.porep_partitions),
+            sector_builder::PoStProofPartitions(cfg.post_partitions),
         ),
         last_used_id,
         &cfg.metadata_dir,
@@ -37,6 +32,7 @@ pub async fn run(
         &cfg.staged_sector_dir,
         cfg.max_num_staged_sectors,
     )?;
+
     let sb = Arc::new(Mutex::new(sb));
 
     println!(
@@ -78,7 +74,10 @@ fn respond(res: Request, sb: Arc<Mutex<SectorBuilder>>) -> Result<Response, fail
             comm_rs,
             challenge_seed,
         } => {
-            let out = fil_api::generate_post(&sb.lock().unwrap(), comm_rs, &challenge_seed)?;
+            let out = sb
+                .lock()
+                .unwrap()
+                .generate_post(&comm_rs, &challenge_seed)?;
             Response::PostGenerate {
                 proofs: out.proofs,
                 faults: out.faults,
@@ -92,16 +91,18 @@ fn respond(res: Request, sb: Arc<Mutex<SectorBuilder>>) -> Result<Response, fail
             proofs,
             faults,
         } => {
-            let valid = fil_api::verify_post(
-                sector_size,
-                proof_partitions,
+            let resp = filecoin_proofs::verify_post(
+                filecoin_proofs::PoStConfig(
+                    filecoin_proofs::SectorSize(sector_size),
+                    filecoin_proofs::PoStProofPartitions(proof_partitions),
+                ),
                 comm_rs,
-                &challenge_seed,
+                challenge_seed,
                 proofs,
                 faults,
             )?;
 
-            Response::PostVerify(valid)
+            Response::PostVerify(resp.is_valid)
         }
 
         // -- Seal
@@ -114,63 +115,74 @@ fn respond(res: Request, sb: Arc<Mutex<SectorBuilder>>) -> Result<Response, fail
             sector_id,
             proof,
         } => {
-            let valid = fil_api::verify_seal(
-                sector_size,
+            let proof_partitions = porep_proof_partitions_try_from_bytes(&proof)?;
+
+            let is_valid = filecoin_proofs::verify_seal(
+                filecoin_proofs::PoRepConfig(
+                    filecoin_proofs::SectorSize(sector_size),
+                    proof_partitions,
+                ),
                 comm_r,
                 comm_d,
                 comm_r_star,
                 &prover_id,
                 &sector_id,
-                proof,
+                &proof,
             )?;
 
-            Response::SealVerify(valid)
+            Response::SealVerify(is_valid)
         }
         Request::SealAllStaged => {
-            fil_api::seal_all_staged_sectors(&sb.lock().unwrap())?;
+            sb.lock().unwrap().seal_all_staged_sectors()?;
             Response::SealAllStaged
         }
         Request::SealStatus(id) => {
-            let status = fil_api::get_seal_status(&sb.lock().unwrap(), id)?;
+            let status = sb.lock().unwrap().get_seal_status(id)?;
             Response::SealStatus(status)
         }
 
         // -- Sector
         Request::SectorSize(sector_size) => {
-            let size = fil_api::get_max_user_bytes_per_staged_sector(sector_size);
+            let size = u64::from(filecoin_proofs::UnpaddedBytesAmount::from(
+                filecoin_proofs::PaddedBytesAmount(sector_size),
+            ));
             Response::SectorSize(size)
         }
         Request::SectorListSealed => {
-            let list = fil_api::get_sealed_sectors(&sb.lock().unwrap())?;
+            let list = sb.lock().unwrap().get_sealed_sectors()?;
             Response::SectorListSealed(list)
         }
         Request::SectorListStaged => {
-            let list = fil_api::get_staged_sectors(&sb.lock().unwrap())?;
+            let list = sb.lock().unwrap().get_staged_sectors()?;
             Response::SectorListStaged(list)
         }
 
         // -- Piece
         Request::PieceAdd { key, amount, path } => {
-            let amount = if let Some(amount) = amount {
-                Ok(amount)
-            } else {
-                get_file_size(&path)
-            }?;
-
-            let id = fil_api::add_piece(&sb.lock().unwrap(), &key, amount, &path)?;
-            Response::PieceAdd(id)
+            let destination_sector_id = &sb.lock().unwrap().add_piece(key, amount, path)?;
+            Response::PieceAdd(*destination_sector_id)
         }
         Request::PieceRead(key) => {
-            let bytes = fil_api::read_piece_from_sealed_sector(&sb.lock().unwrap(), &key)?;
-            Response::PieceRead(bytes)
+            let piece_bytes = sb.lock().unwrap().read_piece_from_sealed_sector(key)?;
+            Response::PieceRead(piece_bytes)
         }
     };
 
     Ok(response)
 }
 
-fn get_file_size(path: &str) -> Result<u64, failure::Error> {
-    let data = std::fs::metadata(path)?;
+fn porep_proof_partitions_try_from_bytes(
+    proof: &[u8],
+) -> Result<filecoin_proofs::PoRepProofPartitions, failure::Error> {
+    let n = proof.len();
 
-    Ok(data.len())
+    ensure!(
+        n % filecoin_proofs::SINGLE_PARTITION_PROOF_LEN == 0,
+        "no PoRepProofPartitions mapping for {:x?}",
+        proof
+    );
+
+    Ok(filecoin_proofs::PoRepProofPartitions(
+        (n / filecoin_proofs::SINGLE_PARTITION_PROOF_LEN) as u8,
+    ))
 }

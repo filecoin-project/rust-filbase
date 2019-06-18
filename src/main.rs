@@ -1,8 +1,12 @@
 #![feature(async_await)]
 
+#[macro_use]
+extern crate failure;
+extern crate filecoin_proofs;
 #[cfg(feature = "benchy")]
 #[macro_use]
 extern crate prometheus;
+extern crate sector_builder;
 
 use clap::{value_t, values_t};
 use failure::bail;
@@ -112,7 +116,8 @@ async fn main() -> Result<(), failure::Error> {
                 let key = m.value_of("KEY").unwrap();
                 let amount = m
                     .value_of("amount")
-                    .map(|s| s.parse().expect("invalid size"));
+                    .map(|s| s.parse().expect("invalid size"))
+                    .unwrap();
                 let path = m.value_of("PATH").unwrap();
 
                 client::piece_add(key, amount, path).await
@@ -124,7 +129,7 @@ async fn main() -> Result<(), failure::Error> {
             }
             _ => bail!("Unknown subcommand"),
         },
-        ("benchy", Some(m)) => {
+        ("benchy", Some(_)) => {
             #[cfg(not(feature = "benchy"))]
             bail!("Please compile with the benchy feature flag to enable benchmarking");
             #[cfg(feature = "benchy")]
