@@ -37,7 +37,7 @@ pub enum Request {
     // -- Piece
     PieceAdd {
         key: String,
-        amount: u64,
+        amount: Option<u64>,
         path: String,
     },
     PieceRead(String),

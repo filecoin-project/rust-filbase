@@ -32,7 +32,6 @@ pub async fn run(
         &cfg.staged_sector_dir,
         cfg.max_num_staged_sectors,
     )?;
-
     let sb = Arc::new(Mutex::new(sb));
 
     println!(
@@ -159,16 +158,28 @@ fn respond(res: Request, sb: Arc<Mutex<SectorBuilder>>) -> Result<Response, fail
 
         // -- Piece
         Request::PieceAdd { key, amount, path } => {
-            let destination_sector_id = &sb.lock().unwrap().add_piece(key, amount, path)?;
-            Response::PieceAdd(*destination_sector_id)
+            let amount = if let Some(amount) = amount {
+                Ok(amount)
+            } else {
+                get_file_size(&path)
+            }?;
+
+            let id = &sb.lock().unwrap().add_piece(key, amount, path)?;
+            Response::PieceAdd(*id)
         }
         Request::PieceRead(key) => {
-            let piece_bytes = sb.lock().unwrap().read_piece_from_sealed_sector(key)?;
-            Response::PieceRead(piece_bytes)
+            let bytes = sb.lock().unwrap().read_piece_from_sealed_sector(key)?;
+            Response::PieceRead(bytes)
         }
     };
 
     Ok(response)
+}
+
+fn get_file_size(path: &str) -> Result<u64, failure::Error> {
+    let data = std::fs::metadata(path)?;
+
+    Ok(data.len())
 }
 
 fn porep_proof_partitions_try_from_bytes(

@@ -93,6 +93,8 @@ impl<'de, Item: Deserialize<'de>> IoDecoder for Decoder<Item> {
 /// called „magic“). This specifies if it should be present when encoding.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SdMode {
+    /// Places the tag in front of each encoded frame.
+    Always,
     /// Places the tag in front of the first encoded frame.
     Once,
     /// Doesn't place the tag at all.
@@ -202,6 +204,17 @@ impl<'de, Dec: Deserialize<'de>, Enc: Serialize> Codec<Dec, Enc> {
         Self {
             dec: self.dec,
             enc: Encoder { sd, ..self.enc },
+        }
+    }
+    /// Turns the internal encoder into one with configured packed encoding.
+    ///
+    /// If `packed` is true, it omits the field names from the encoded data. That makes it smaller,
+    /// but it also means the decoding end must know the exact order of fields and it can't be
+    /// something like python, which would want to get a dictionary out of it.
+    pub fn packed(self, packed: bool) -> Self {
+        Self {
+            dec: self.dec,
+            enc: Encoder { packed, ..self.enc },
         }
     }
 }

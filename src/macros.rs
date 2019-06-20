@@ -11,7 +11,7 @@ macro_rules! hex_vec_arr {
         $matches
             .values_of($field)
             .expect("missing required field")
-            .map(<[u8; $size] as hex::FromHex>::from_hex)
+            .map(|v| <[u8; $size] as hex::FromHex>::from_hex(v))
             .collect::<Result<Vec<_>, _>>()
     }};
 }
@@ -21,7 +21,7 @@ macro_rules! hex_vec_vec {
         $matches
             .values_of($field)
             .expect("missing required field")
-            .map(<Vec<u8> as hex::FromHex>::from_hex)
+            .map(|v| <Vec<u8> as hex::FromHex>::from_hex(v))
             .collect::<Result<Vec<_>, _>>()
     }};
 }
