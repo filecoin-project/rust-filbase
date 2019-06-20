@@ -59,8 +59,8 @@ async fn main() -> Result<(), failure::Error> {
                 let proof_partitions = value_t!(m, "proof-partitions", u8)?;
                 let comm_rs = hex_vec_arr!(32, m, "comm-rs")?;
                 let challenge_seed = hex_arr!(32, m, "challenge-seed")?;
-                let proofs = hex_vec_vec!(m, "proof")?;
-                let faults = values_t!(m, "faults", u64)?;
+                let proofs = hex_vec_vec!(m, "proofs")?;
+                let faults = values_t!(m, "faults", u64).unwrap_or_else(|_| vec![]);
 
                 client::post_verify(
                     sector_size,
