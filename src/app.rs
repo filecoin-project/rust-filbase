@@ -92,6 +92,13 @@ pub fn get_matches() -> clap::ArgMatches<'static> {
                                 .help("A list of sector ids who faulted")
                                 .use_delimiter(true)
                                 .takes_value(true)
+                                .required(false),
+                        )
+                        .arg(
+                            Arg::with_name("proof-partitions")
+                                .long("proof-partitions")
+                                .help("An integer representing the number of partitions used to create a PoSt proof")
+                                .takes_value(true)
                                 .required(true),
                         ),
                 ),
